@@ -1,0 +1,11 @@
+/**
+ * All of the CSS for your admin-specific functionality should be
+ * included in this file.
+ */
+.acfsr-wrap .regular-text {
+  width: 28rem;
+  max-width: 100%;
+}
+.acfsr-wrap code {
+  white-space: nowrap;
+}

@@ -1,0 +1,12 @@
+ {
+  "name": "yourvendor/acf-aware-search-replace",
+  "type": "wordpress-plugin",
+  "autoload": {
+    "classmap": [
+      "includes/",
+      "admin/",
+      "public/",
+      "core/"
+    ]
+  }
+}
