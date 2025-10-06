@@ -1,0 +1,59 @@
+/**
+ * All of the CSS for your admin-specific functionality should be
+ * included in this file.
+ */
+.acfsr-wrap .regular-text {
+  width: 28rem;
+  max-width: 100%;
+  font-size: 14px;
+  line-height: 2;
+  color: #2c3338;
+  border: 1px solid #8c8f94;
+  box-shadow: none;
+  border-radius: 3px;
+  padding: 0 24px 0 8px;
+  min-height: 30px;
+}
+.acfsr-wrap code {
+  white-space: nowrap;
+}
+.acfsr-snippet mark.acfsr-hit {
+  background: #fff3a3; /* soft yellow */
+  padding: 0 0.15em;
+  border-radius: 0.2em;
+}
+.acfsr-wrap .row {
+  padding-bottom: 2rem;
+  display: flex;
+}
+.acfsr-wrap h3 {
+  margin: 0;
+  padding: 0 0 0.5rem;
+}
+
+#acfsr-per-page-custom-wrap {
+  margin-left: 0.5rem;
+}
+
+p.submit {
+  margin-top: 0px;
+  padding-top: 0px;
+}
+.submit {
+  padding: 0;
+  margin: 0;
+}
+
+@media screen and (min-width: 769px) {
+  .acfsr-wrap .row {
+    flex-direction: row;
+  }
+
+  .acfsr-wrap .row > * {
+    margin-right: 12px;
+  }
+  .acfsr-wrap .helptext {
+    display: block;
+    font-size: 12px;
+  }
+}
