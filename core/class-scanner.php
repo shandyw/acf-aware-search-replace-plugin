@@ -1,9 +1,5 @@
 <?php
 
-namespace ACFSR;
-
-use wpdb;
-
 if (!defined('ABSPATH')) exit;
 
 class ACFSR_Core_Scanner
@@ -31,6 +27,8 @@ class ACFSR_Core_Scanner
         $this->scanMeta      = (bool)($args['scanMeta'] ?? true);
         $this->scanOptions   = (bool)($args['scanOptions'] ?? true);
         $this->fieldsCore    = $args['fieldsCore'] ?? ['post_title', 'post_content', 'post_excerpt'];
+        $this->wholeWord  = (bool)($args['wholeWord'] ?? false);
+        $this->useRegex   = (bool)($args['useRegex'] ?? false);
 
         // pagination controls
         $this->perPage       = max(1, (int)($args['perPage'] ?? 2000));  // sane default
@@ -130,7 +128,7 @@ class ACFSR_Core_Scanner
 
         $criteria = [];
         foreach ($this->fieldsCore as $f) {
-            $criteria[] = $wpdb->prepare("$f LIKE %s", Helpers::make_like($this->needle));
+            $criteria[] = $wpdb->prepare("$f LIKE %s", ACFSR_Core_Helpers::make_like($this->needle));
         }
         if (empty($criteria)) {
             return ['rows' => [], 'matches' => 0, 'touched' => 0];
@@ -161,17 +159,20 @@ class ACFSR_Core_Scanner
                 $count = $this->caseSensitive
                     ? substr_count($original, $this->needle)
                     : (preg_match_all('/' . preg_quote($this->needle, '/') . '/i', $original) ?: 0);
-
+                $count = is_string($original) ? $this->count_matches($original) : 0;
                 if ($count > 0) {
                     $hitCount += $count;
 
                     if (!$this->dryRun && $this->replace !== null) {
-                        $new = $this->caseSensitive
-                            ? str_replace($this->needle, $this->replace, $original)
-                            : preg_replace('/' . preg_quote($this->needle, '/') . '/i', $this->replace, $original);
-
+                        $new = $this->replace_str($original);
                         $wpdb->update($wpdb->posts, [$f => $new], ['ID' => $p->ID]);
                         clean_post_cache($p->ID);
+                    }
+
+                    $edit = get_edit_post_link((int) $p->ID, '');
+                    if (empty($edit)) {
+                        // Fallback if WP can’t build it for some reason
+                        $edit = admin_url('post.php?post=' . (int) $p->ID . '&action=edit');
                     }
 
                     $rows[] = [
@@ -181,8 +182,15 @@ class ACFSR_Core_Scanner
                         'post_type' => $p->post_type,
                         'field' => $f,
                         'match_count' => $count,
-                        'snippet' => Helpers::snippet($original, $this->needle, $this->caseSensitive),
-                        'edit_link' => get_edit_post_link($p->ID, ''),
+                        'snippet'     => ACFSR_Core_Helpers::snippet($original, $this->needle, $this->caseSensitive),
+                        'snippet_html' => ACFSR_Core_Helpers::snippet_highlight(
+                            $original,
+                            $this->needle,
+                            $this->caseSensitive,
+                            $this->wholeWord ?? false,
+                            $this->useRegex  ?? false
+                        ),
+                        'edit_link'   => $edit,
                     ];
                 }
             }
@@ -207,8 +215,8 @@ class ACFSR_Core_Scanner
              FROM {$wpdb->postmeta}
              WHERE meta_value LIKE %s OR meta_key LIKE %s
              LIMIT %d OFFSET %d",
-            Helpers::make_like($this->needle),
-            Helpers::make_like($this->needle),
+            ACFSR_Core_Helpers::make_like($this->needle),
+            ACFSR_Core_Helpers::make_like($this->needle),
             $this->perPage,
             $this->offset()
         );
@@ -218,10 +226,17 @@ class ACFSR_Core_Scanner
         foreach ($cands as $m) {
             $value = $m->meta_value;
 
-            $isSerialized = Helpers::is_serialized_value($value);
+            $isSerialized = ACFSR_Core_Helpers::is_serialized_value($value);
             $un = $isSerialized ? @unserialize($value) : $value;
 
-            $res = DeepReplace::replace($un, $this->needle, (string)$this->replace, $this->caseSensitive);
+            $res = ACFSR_Core_Deep_Replace::replace(
+                $un,
+                $this->needle,
+                (string)$this->replace,
+                $this->caseSensitive,
+                $this->wholeWord,
+                $this->useRegex
+            );
             $count = $res['matches'];
 
             if ($count > 0) {
@@ -231,15 +246,21 @@ class ACFSR_Core_Scanner
                     clean_post_cache($m->post_id);
                 }
 
+                $edit = get_edit_post_link((int) $m->post_id, '');
+                if (empty($edit)) {
+                    $edit = admin_url('post.php?post=' . (int) $m->post_id . '&action=edit');
+                }
+
                 $rows[] = [
-                    'type' => 'meta',
-                    'id'   => (int)$m->post_id,
-                    'title' => get_the_title($m->post_id),
-                    'meta_id' => (int)$m->meta_id,
-                    'meta_key' => $m->meta_key,
+                    'type'        => 'meta',
+                    'id'          => (int) $m->post_id,
+                    'title'       => get_the_title($m->post_id),
+                    'meta_id'     => (int) $m->meta_id,
+                    'meta_key'    => $m->meta_key,
                     'match_count' => $count,
-                    'snippet' => is_string($value) ? Helpers::snippet($value, $this->needle, $this->caseSensitive) : '',
-                    'edit_link' => get_edit_post_link($m->post_id, ''),
+                    'snippet'     => is_string($value) ? ACFSR_Core_Helpers::snippet($value, $this->needle, $this->caseSensitive) : '',
+                    'snippet_html' => is_string($value) ? ACFSR_Core_Helpers::snippet_highlight($value, $this->needle, $this->caseSensitive, $this->wholeWord ?? false, $this->useRegex ?? false) : '',
+                    'edit_link'   => $edit,
                 ];
                 $matches += $count;
                 $touched++;
@@ -260,8 +281,8 @@ class ACFSR_Core_Scanner
              FROM {$wpdb->options}
              WHERE option_value LIKE %s OR option_name LIKE %s
              LIMIT %d OFFSET %d",
-            Helpers::make_like($this->needle),
-            Helpers::make_like($this->needle),
+            ACFSR_Core_Helpers::make_like($this->needle),
+            ACFSR_Core_Helpers::make_like($this->needle),
             $this->perPage,
             $this->offset()
         );
@@ -270,10 +291,10 @@ class ACFSR_Core_Scanner
 
         foreach ($cands as $o) {
             $val = $o->option_value;
-            $isSerialized = Helpers::is_serialized_value($val);
+            $isSerialized = ACFSR_Core_Helpers::is_serialized_value($val);
             $un = $isSerialized ? @unserialize($val) : $val;
 
-            $res = DeepReplace::replace($un, $this->needle, (string)$this->replace, $this->caseSensitive);
+            $res = ACFSR_Core_Deep_Replace::replace($un, $this->needle, (string)$this->replace, $this->caseSensitive);
             $count = $res['matches'];
 
             if ($count > 0) {
@@ -281,14 +302,25 @@ class ACFSR_Core_Scanner
                     $newVal = $isSerialized ? serialize($res['value']) : $res['value'];
                     $wpdb->update($wpdb->options, ['option_value' => $newVal], ['option_id' => $o->option_id]);
                 }
+
+                $edit = admin_url('options-general.php');
+
+                // If ACF Options page exists, use it (common place for ACF option fields)
+                if (function_exists('acf_add_options_page')) {
+                    // Common slug; if you use a custom slug in your project, adjust here
+                    $maybe = admin_url('admin.php?page=acf-options');
+                    $edit  = $maybe ?: $edit;
+                }
+
                 $rows[] = [
-                    'type' => 'option',
-                    'id'   => (int)$o->option_id,
-                    'title' => $o->option_name,
-                    'field' => 'option_value',
+                    'type'        => 'option',
+                    'id'          => (int) $o->option_id,
+                    'title'       => $o->option_name,
+                    'field'       => 'option_value',
                     'match_count' => $count,
-                    'snippet' => is_string($val) ? Helpers::snippet($val, $this->needle, $this->caseSensitive) : '',
-                    'edit_link' => admin_url('options-general.php'),
+                    'snippet'     => is_string($val) ? ACFSR_Core_Helpers::snippet($val, $this->needle, $this->caseSensitive) : '',
+                    'snippet_html' => is_string($val) ? ACFSR_Core_Helpers::snippet_highlight($val, $this->needle, $this->caseSensitive, $this->wholeWord ?? false, $this->useRegex ?? false) : '',
+                    'edit_link'   => $edit,
                 ];
                 $matches += $count;
                 $touched++;
@@ -296,5 +328,23 @@ class ACFSR_Core_Scanner
         }
 
         return compact('rows', 'matches', 'touched');
+    }
+
+    protected function pattern(): string
+    {
+        return ACFSR_Core_Helpers::build_pattern($this->needle, $this->caseSensitive, $this->wholeWord, $this->useRegex);
+    }
+    protected function count_matches(string $text): int
+    {
+        $pat = $this->pattern();
+        if ($pat === '//') return 0;
+        $ok = preg_match_all($pat, $text, $m);
+        return $ok === false ? 0 : (int)$ok;
+    }
+    protected function replace_str(string $text): string
+    {
+        $pat = $this->pattern();
+        $new = preg_replace($pat, (string)$this->replace, $text);
+        return $new === null ? $text : $new;
     }
 }

@@ -1,34 +1,21 @@
 <?php
 
-namespace ACFSR;
-
 if (!defined('ABSPATH')) exit;
 
 class ACFSR_Core_Deep_Replace
 {
-    /**
-     * Deeply replace in strings/arrays/objects. Returns array:
-     * ['value' => mixed, 'matches' => int]
-     */
-    public static function replace($data, $needle, $replace, $caseSensitive = false)
+    public static function replace($data, $needle, $replace, $caseSensitive = false, $wholeWord = false, $useRegex = false): array
     {
         $matches = 0;
+        $pattern = ACFSR_Core_Helpers::build_pattern((string)$needle, (bool)$caseSensitive, (bool)$wholeWord, (bool)$useRegex);
 
-        $replacer = function ($str) use ($needle, $replace, $caseSensitive, &$matches) {
-            if (!is_string($str)) return $str;
-            if ($needle === '') return $str;
-            if ($caseSensitive) {
-                $count = 0;
-                $new = str_replace($needle, $replace, $str, $count);
-                $matches += $count;
-                return $new;
-            } else {
-                // case-insensitive replace with count
-                $pattern = '/' . preg_quote($needle, '/') . '/i';
-                $new = preg_replace($pattern, $replace, $str, -1, $count);
-                $matches += (int)$count;
-                return $new;
-            }
+        $replacer = function ($str) use ($pattern, $replace, &$matches, $useRegex) {
+            if (!is_string($str) || $pattern === '//') return $str;
+            $new = preg_replace($pattern, (string)$replace, $str, -1, $count);
+            // preg_replace returns null on bad regex; fail safe by keeping original
+            if ($new === null) return $str;
+            $matches += (int)$count;
+            return $new;
         };
 
         $walker = function ($v) use (&$walker, $replacer) {

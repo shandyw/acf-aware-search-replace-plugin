@@ -19,9 +19,6 @@ class ACFSR
 		require_once ACFSR_DIR . 'includes/class-acf-aware-search-replace-loader.php';
 		require_once ACFSR_DIR . 'includes/class-acf-aware-search-replace-i18n.php';
 
-		// Admin/Public
-		require_once ACFSR_DIR . 'admin/class-acf-aware-search-replace-admin.php';
-		require_once ACFSR_DIR . 'public/class-acf-aware-search-replace-public.php';
 
 		// Core logic
 		require_once ACFSR_DIR . 'core/class-helpers.php';
@@ -29,13 +26,17 @@ class ACFSR
 		require_once ACFSR_DIR . 'core/class-scanner.php';
 		require_once ACFSR_DIR . 'core/class-cli.php';
 
+		// Admin/Public
+		require_once ACFSR_DIR . 'admin/class-acf-aware-search-replace-admin.php';
+		require_once ACFSR_DIR . 'public/class-acf-aware-search-replace-public.php';
+
 		$this->loader = new ACFSR_Loader();
 	}
 
 	private function set_locale()
 	{
 		$plugin_i18n = new ACFSR_i18n();
-		$this->loader->add_action('plugins_loaded', $plugin_i18n, 'load_plugin_textdomain');
+		$this->loader->add_action('init', $plugin_i18n, 'load_plugin_textdomain', 0);
 	}
 
 	private function define_admin_hooks()
@@ -47,8 +48,11 @@ class ACFSR
 		$this->loader->add_action('admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts');
 
 		// Form handlers (scan/replace + CSV export)
+
+
 		$this->loader->add_action('admin_post_acfsr_run',    $plugin_admin, 'handle_run');
 		$this->loader->add_action('admin_post_acfsr_export', $plugin_admin, 'handle_export');
+		$this->loader->add_action('admin_post_acfsr_clear',  $plugin_admin, 'handle_clear');
 	}
 
 	private function define_public_hooks()
