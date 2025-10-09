@@ -14,9 +14,7 @@
   padding: 0 24px 0 8px;
   min-height: 30px;
 }
-.acfsr-wrap code {
-  white-space: nowrap;
-}
+
 .acfsr-snippet mark.acfsr-hit {
   background: #fff3a3; /* soft yellow */
   padding: 0 0.15em;
